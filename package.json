@@ -6,8 +6,13 @@
 "scripts": {
 "start": "node backend/server.js"
 },
-"keywords": [],
-"author": "",
+"keywords": [
+"ICT251",
+"Node.js",
+"Express",
+"SQLite",
+"CRUD"
+],
 "license": "ISC",
 "type": "commonjs",
 "dependencies": {

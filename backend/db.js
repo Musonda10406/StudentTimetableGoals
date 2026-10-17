@@ -2,7 +2,9 @@ const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
 
-const databasePath = path.join(__dirname, 'database.sqlite');
+const databasePath = process.env.DB_FILE
+? path.resolve(process.env.DB_FILE)
+: path.join(__dirname, 'database.sqlite');
 
 let db;
 
@@ -31,33 +33,39 @@ db.run(`
 `);
 
 const result = db.exec('SELECT COUNT(*) AS total FROM timetable');
-const total = result[0].values[0][0];
+const totalRecords = Number(result[0].values[0][0]);
 
-if (total === 0) {
+if (totalRecords === 0) {
     const sampleRecords = [
-        ['ICT221', 'Computer Architecture', 'Study CPU performance', '2026-10-19', '08:00', 60],
-        ['ICT261', 'Object-Oriented Programming', 'Practice Java classes', '2026-10-19', '10:00', 90],
+        ['ICT221', 'Computer Architecture', 'Study CPU components', '2026-10-19', '08:00', 60],
+        ['ICT261', 'Object-Oriented Programming and Java', 'Practise Java classes', '2026-10-19', '10:00', 90],
         ['ICT281', 'Statistics and Empirical Methods', 'Revise probability', '2026-10-19', '14:00', 60],
         ['ICT241', 'Digital Design', 'Practise Boolean algebra', '2026-10-20', '08:00', 60],
-        ['MSM111', 'Mathematical Methods I', 'Practise functions', '2026-10-20', '10:00', 90],
-        ['ICT251', 'Web Technologies I', 'Build a Node.js API', '2026-10-20', '14:00', 120],
+        ['MSM111', 'Mathematical Methods I', 'Solve practice questions', '2026-10-20', '10:00', 90],
+        ['ICT251', 'Web Technologies I', 'Practise Node.js CRUD', '2026-10-20', '14:00', 90],
         ['ICT221', 'Computer Architecture', 'Revise memory hierarchy', '2026-10-21', '08:00', 60],
-        ['ICT261', 'Object-Oriented Programming', 'Practise inheritance', '2026-10-21', '10:00', 90],
-        ['ICT241', 'Digital Design', 'Practise logic gates', '2026-10-22', '09:00', 60],
-        ['ICT251', 'Web Technologies I', 'Practise REST API requests', '2026-10-22', '14:00', 120]
+        ['ICT261', 'Object-Oriented Programming and Java', 'Practise inheritance', '2026-10-21', '10:00', 90],
+        ['ICT241', 'Digital Design', 'Revise logic gates', '2026-10-22', '08:00', 60],
+        ['ICT251', 'Web Technologies I', 'Review Express routes', '2026-10-22', '14:00', 90]
     ];
 
-    const insert = db.prepare(`
-        INSERT INTO timetable
-        (course_code, course_name, study_goal, study_date, start_time, duration_minutes)
+    const statement = db.prepare(`
+        INSERT INTO timetable (
+            course_code,
+            course_name,
+            study_goal,
+            study_date,
+            start_time,
+            duration_minutes
+        )
         VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-    sampleRecords.forEach(record => {
-        insert.run(record);
-    });
+    for (const record of sampleRecords) {
+        statement.run(record);
+    }
 
-    insert.free();
+    statement.free();
 }
 
 saveDatabase();
@@ -71,8 +79,13 @@ if (!db) {
 throw new Error('Database has not been initialized.');
 }
 
-const data = db.export();
-fs.writeFileSync(databasePath, Buffer.from(data));
+const databaseData = db.export();
+
+fs.mkdirSync(path.dirname(databasePath), {
+    recursive: true
+});
+
+fs.writeFileSync(databasePath, Buffer.from(databaseData));
 
 }
 

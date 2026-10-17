@@ -1,8 +1,15 @@
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+require('dotenv').config({
+path: require('path').join(__dirname, '.env')
+});
 
 const express = require('express');
 const cors = require('cors');
-const { initializeDatabase, getDatabase, saveDatabase } = require('./db');
+
+const {
+initializeDatabase,
+getDatabase,
+saveDatabase
+} = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,150 +17,253 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Check that the API is running.
 app.get('/', (req, res) => {
 res.json({
-message: 'Student Timetable & Goals API is running.',
-endpoints: [
-'GET /api/timetable',
-'GET /api/timetable/:id',
-'POST /api/timetable',
-'PUT /api/timetable/:id',
-'DELETE /api/timetable/:id'
-]
+message: 'Student Timetable and Goals API is running.',
+endpoints: {
+getAll: 'GET /api/timetable',
+getById: 'GET /api/timetable/:id',
+create: 'POST /api/timetable',
+update: 'PUT /api/timetable/:id',
+delete: 'DELETE /api/timetable/:id'
+}
 });
 });
 
-// GET: Retrieve all timetable records.
+function getTimetableRecords() {
+const db = getDatabase();
+
+const result = db.exec(`
+    SELECT *
+    FROM timetable
+    ORDER BY study_date ASC, start_time ASC
+`);
+
+if (!result.length) {
+    return [];
+}
+
+const columns = result[0].columns;
+const rows = result[0].values;
+
+return rows.map(row => {
+    const record = {};
+
+    columns.forEach((column, index) => {
+        record[column] = row[index];
+    });
+
+    return record;
+});
+
+}
+
+function getTimetableRecord(id) {
+const db = getDatabase();
+
+const statement = db.prepare(
+    'SELECT * FROM timetable WHERE id = ?'
+);
+
+statement.bind([id]);
+
+let record = null;
+
+if (statement.step()) {
+    record = statement.getAsObject();
+}
+
+statement.free();
+
+return record;
+
+}
+
+function validateTimetableData(data) {
+const requiredFields = [
+'course_code',
+'course_name',
+'study_goal',
+'study_date',
+'start_time',
+'duration_minutes'
+];
+
+for (const field of requiredFields) {
+    if (
+        data[field] === undefined ||
+        data[field] === null ||
+        String(data[field]).trim() === ''
+    ) {
+        return `${field} is required.`;
+    }
+}
+
+if (
+    !Number.isInteger(Number(data.duration_minutes)) ||
+    Number(data.duration_minutes) <= 0
+) {
+    return 'duration_minutes must be a positive whole number.';
+}
+
+if (!/^\d{4}-\d{2}-\d{2}$/.test(data.study_date)) {
+    return 'study_date must use YYYY-MM-DD format.';
+}
+
+if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(data.start_time)) {
+    return 'start_time must use HH:MM format.';
+}
+
+return null;
+
+}
+
+// GET all timetable records
 app.get('/api/timetable', (req, res) => {
 try {
-const db = getDatabase();
-const result = db.exec('SELECT * FROM timetable ORDER BY id');
-
-    const records = result.length
-        ? result[0].values.map(row => {
-            const record = {};
-            result[0].columns.forEach((column, index) => {
-                record[column] = row[index];
-            });
-            return record;
-        })
-        : [];
-
-    res.json(records);
+res.status(200).json({
+success: true,
+count: getTimetableRecords().length,
+data: getTimetableRecords()
+});
 } catch (error) {
-    res.status(500).json({ error: error.message });
+console.error('GET all error:', error);
+
+    res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve timetable records.'
+    });
 }
 
 });
 
-// GET: Retrieve one timetable record by ID.
+// GET one timetable record by ID
 app.get('/api/timetable/:id', (req, res) => {
-try {
 const id = Number(req.params.id);
 
-    if (!Number.isInteger(id) || id < 1) {
-        return res.status(400).json({ error: 'A valid record ID is required.' });
-    }
-
-    const db = getDatabase();
-    const statement = db.prepare('SELECT * FROM timetable WHERE id = ?');
-    statement.bind([id]);
-
-    let record = null;
-
-    if (statement.step()) {
-        record = statement.getAsObject();
-    }
-
-    statement.free();
-
-    if (!record) {
-        return res.status(404).json({ error: 'Timetable record not found.' });
-    }
-
-    res.json(record);
-} catch (error) {
-    res.status(500).json({ error: error.message });
+if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({
+        success: false,
+        message: 'A valid record ID is required.'
+    });
 }
 
-});
-
-// POST: Create a timetable record.
-app.post('/api/timetable', (req, res) => {
 try {
-const {
-course_code,
-course_name,
-study_goal,
-study_date,
-start_time,
-duration_minutes
-} = req.body;
+    const record = getTimetableRecord(id);
 
-    if (
-        typeof course_code !== 'string' || !course_code.trim() ||
-        typeof course_name !== 'string' || !course_name.trim() ||
-        typeof study_goal !== 'string' || !study_goal.trim() ||
-        typeof study_date !== 'string' || !study_date.trim() ||
-        typeof start_time !== 'string' || !start_time.trim() ||
-        !Number.isInteger(Number(duration_minutes)) ||
-        Number(duration_minutes) <= 0
-    ) {
-        return res.status(400).json({
-            error: 'Provide course_code, course_name, study_goal, study_date, start_time, and a positive duration_minutes.'
+    if (!record) {
+        return res.status(404).json({
+            success: false,
+            message: 'Timetable record not found.'
         });
     }
 
+    res.status(200).json({
+        success: true,
+        data: record
+    });
+} catch (error) {
+    console.error('GET by ID error:', error);
+
+    res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve timetable record.'
+    });
+}
+
+});
+
+// POST create a timetable record
+app.post('/api/timetable', (req, res) => {
+const validationError = validateTimetableData(req.body);
+
+if (validationError) {
+    return res.status(400).json({
+        success: false,
+        message: validationError
+    });
+}
+
+const {
+    course_code,
+    course_name,
+    study_goal,
+    study_date,
+    start_time,
+    duration_minutes
+} = req.body;
+
+try {
     const db = getDatabase();
 
-    const statement = db.prepare(`
-        INSERT INTO timetable
-        (course_code, course_name, study_goal, study_date, start_time, duration_minutes)
+    db.run(`
+        INSERT INTO timetable (
+            course_code,
+            course_name,
+            study_goal,
+            study_date,
+            start_time,
+            duration_minutes
+        )
         VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    statement.run([
-        course_code.trim(),
-        course_name.trim(),
-        study_goal.trim(),
-        study_date.trim(),
-        start_time.trim(),
+    `, [
+        String(course_code).trim(),
+        String(course_name).trim(),
+        String(study_goal).trim(),
+        study_date,
+        start_time,
         Number(duration_minutes)
     ]);
 
-    statement.free();
-
     const result = db.exec('SELECT last_insert_rowid() AS id');
-    const id = result[0].values[0][0];
+    const newId = Number(result[0].values[0][0]);
 
     saveDatabase();
 
     res.status(201).json({
+        success: true,
         message: 'Timetable record created successfully.',
-        record: {
-            id,
-            course_code: course_code.trim(),
-            course_name: course_name.trim(),
-            study_goal: study_goal.trim(),
-            study_date: study_date.trim(),
-            start_time: start_time.trim(),
-            duration_minutes: Number(duration_minutes)
-        }
+        data: getTimetableRecord(newId)
     });
 } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('POST error:', error);
+
+    res.status(500).json({
+        success: false,
+        message: 'Failed to create timetable record.'
+    });
 }
 
 });
 
-// PUT: Update an existing timetable record.
+// PUT update a timetable record
 app.put('/api/timetable/:id', (req, res) => {
-try {
 const id = Number(req.params.id);
 
-    if (!Number.isInteger(id) || id < 1) {
-        return res.status(400).json({ error: 'A valid record ID is required.' });
+if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({
+        success: false,
+        message: 'A valid record ID is required.'
+    });
+}
+
+const validationError = validateTimetableData(req.body);
+
+if (validationError) {
+    return res.status(400).json({
+        success: false,
+        message: validationError
+    });
+}
+
+try {
+    const existingRecord = getTimetableRecord(id);
+
+    if (!existingRecord) {
+        return res.status(404).json({
+            success: false,
+            message: 'Timetable record not found.'
+        });
     }
 
     const {
@@ -165,34 +275,12 @@ const id = Number(req.params.id);
         duration_minutes
     } = req.body;
 
-    if (
-        typeof course_code !== 'string' || !course_code.trim() ||
-        typeof course_name !== 'string' || !course_name.trim() ||
-        typeof study_goal !== 'string' || !study_goal.trim() ||
-        typeof study_date !== 'string' || !study_date.trim() ||
-        typeof start_time !== 'string' || !start_time.trim() ||
-        !Number.isInteger(Number(duration_minutes)) ||
-        Number(duration_minutes) <= 0
-    ) {
-        return res.status(400).json({
-            error: 'Provide all six fields with a positive duration_minutes.'
-        });
-    }
-
     const db = getDatabase();
-    const check = db.prepare('SELECT id FROM timetable WHERE id = ?');
-    check.bind([id]);
 
-    const exists = check.step();
-    check.free();
-
-    if (!exists) {
-        return res.status(404).json({ error: 'Timetable record not found.' });
-    }
-
-    const statement = db.prepare(`
+    db.run(`
         UPDATE timetable
-        SET course_code = ?,
+        SET
+            course_code = ?,
             course_name = ?,
             study_goal = ?,
             study_date = ?,
@@ -200,76 +288,80 @@ const id = Number(req.params.id);
             duration_minutes = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    `);
-
-    statement.run([
-        course_code.trim(),
-        course_name.trim(),
-        study_goal.trim(),
-        study_date.trim(),
-        start_time.trim(),
+    `, [
+        String(course_code).trim(),
+        String(course_name).trim(),
+        String(study_goal).trim(),
+        study_date,
+        start_time,
         Number(duration_minutes),
         id
     ]);
 
-    statement.free();
     saveDatabase();
 
-    const updatedStatement = db.prepare('SELECT * FROM timetable WHERE id = ?');
-    updatedStatement.bind([id]);
-
-    let updatedRecord = null;
-
-    if (updatedStatement.step()) {
-        updatedRecord = updatedStatement.getAsObject();
-    }
-
-    updatedStatement.free();
-
-    res.json({
+    res.status(200).json({
+        success: true,
         message: 'Timetable record updated successfully.',
-        record: updatedRecord
+        data: getTimetableRecord(id)
     });
 } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('PUT error:', error);
+
+    res.status(500).json({
+        success: false,
+        message: 'Failed to update timetable record.'
+    });
 }
 
 });
 
-// DELETE: Delete a timetable record.
+// DELETE a timetable record
 app.delete('/api/timetable/:id', (req, res) => {
-try {
 const id = Number(req.params.id);
 
-    if (!Number.isInteger(id) || id < 1) {
-        return res.status(400).json({ error: 'A valid record ID is required.' });
+if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({
+        success: false,
+        message: 'A valid record ID is required.'
+    });
+}
+
+try {
+    const existingRecord = getTimetableRecord(id);
+
+    if (!existingRecord) {
+        return res.status(404).json({
+            success: false,
+            message: 'Timetable record not found.'
+        });
     }
 
     const db = getDatabase();
-    const statement = db.prepare('SELECT id FROM timetable WHERE id = ?');
-    statement.bind([id]);
 
-    const exists = statement.step();
-    statement.free();
-
-    if (!exists) {
-        return res.status(404).json({ error: 'Timetable record not found.' });
-    }
-
-    const deleteStatement = db.prepare('DELETE FROM timetable WHERE id = ?');
-    deleteStatement.run([id]);
-    deleteStatement.free();
+    db.run(
+        'DELETE FROM timetable WHERE id = ?',
+        [id]
+    );
 
     saveDatabase();
 
-    res.json({ message: 'Timetable record deleted successfully.', id });
+    res.status(200).json({
+        success: true,
+        message: 'Timetable record deleted successfully.',
+        data: existingRecord
+    });
 } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('DELETE error:', error);
+
+    res.status(500).json({
+        success: false,
+        message: 'Failed to delete timetable record.'
+    });
 }
 
 });
 
-// Initialize the database before accepting API requests.
 async function startServer() {
 try {
 await initializeDatabase();
