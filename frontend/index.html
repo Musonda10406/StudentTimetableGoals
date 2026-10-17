@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Timetable & Goals</title>
+
+<style>
+:root {
+    --line: rgba(180,210,255,.25);
+    --text: #f5f8ff;
+    --muted: #bed0ed;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: var(--text);
+    background:
+        radial-gradient(ellipse at 15% 10%, #326cc477, transparent 35%),
+        radial-gradient(ellipse at 85% 15%, #d080494d, transparent 30%),
+        linear-gradient(135deg, #071329, #172c53, #10182f);
+    background-attachment: fixed;
+}
+
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid #8bc4ff;
+    outline-offset: 3px;
+}
+
+.app {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    min-height: 100vh;
+}
+
+.sidebar {
+    padding: 24px 18px;
+    background: #07152be0;
+    border-right: 1px solid var(--line);
+    backdrop-filter: blur(20px);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+.brand-icon {
+    font-size: 35px;
+    animation: float 3s ease-in-out infinite;
+}
+
+.brand h1 {
+    font-size: 17px;
+    margin: 0 0 5px;
+}
+
+.brand p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.nav {
+    display: grid;
+    gap: 8px;
+}
+
+.nav button {
+    padding: 13px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    color: #c6d8f5;
+    background: transparent;
+    text-align: left;
+    transition: .25s;
+}
+
+.nav button:hover {
+    background: #3977d944;
+    transform: translateX(4px);
+}
+
+.nav button.active {
+    background: linear-gradient(110deg, #4557ff, #2378d6);
+    color: white;
+    box-shadow: 0 6px 22px #2269e744;
+}
+
+.nav-separator {
+    height: 1px;
+    background: var(--line);
+    margin: 10px 0;
+}
+
+.quote {
+    margin-top: auto;
+    color: #b9d3f7;
+    line-height: 1.7;
+    font-size: 13px;
+}
+
+main {
+    min-width: 0;
+    padding: 0 25px 35px;
+}
+
+.topbar {
+    min-height: 75px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 25px;
+}
+
+.date { font-size: 13px; color: var(--muted); }
+
+.profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #65c5ff, #3264ed);
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+}
+
+.welcome h2 {
+    font-size: 29px;
+    margin: 0 0 8px;
+}
+
+.welcome h2 em {
+    color: #7eacff;
+    font-style: normal;
+}
+
+.welcome p {
+    color: var(--muted);
+    margin-bottom: 24px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 13px;
+    margin-bottom: 18px;
+}
+
+.glass {
+    background: linear-gradient(135deg, #7195c638, #253b6580);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 12px 30px #0002;
+}
+
+.stat {
+    padding: 17px 13px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: .25s;
+}
+
+.stat:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 16px 30px #0004;
+}
+
+.stat-icon {
+    width: 43px;
+    height: 43px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    font-size: 21px;
+}
+
+.blue { background: #347eff; }
+.green { background: #0dc79a; }
+.orange { background: #ff9e2f; }
+.purple { background: #a64df4; }
+
+.stat-label {
+    font-size: 12px;
+    color: #d0e0fa;
+    margin-bottom: 7px;
+}
+
+.stat strong { font-size: 26px; }
+
+.stat small {
+    display: block;
+    color: var(--muted);
+    margin-top: 5px;
+    font-size: 11px;
+}
+
+.main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(270px, 1fr);
+    gap: 15px;
+}
+
+.bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.panel {
+    padding: 16px;
+    min-width: 0;
+    animation: fadeUp .4s ease;
+}
+
+.panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.panel-heading h3 {
+    font-size: 16px;
+    margin: 0;
+}
+
+.panel-heading h3 span { color: #7aabff; }
+
+.small-btn,
+.primary-btn,
+.ghost-btn,
+.danger-btn {
+    padding: 9px 11px;
+    border: 1px solid #a6c8ff44;
+    border-radius: 9px;
+    color: white;
+    background: #3477dc66;
+    font-size: 12px;
+    transition: .2s;
+}
+
+.small-btn:hover,
+.primary-btn:hover {
+    transform: translateY(-2px);
+    background: #347eff;
+}
+
+.primary-btn { background: #2877f6; }
+.ghost-btn { background: transparent; }
+.danger-btn { background: #a52d4c88; }
+
+.timetable-wrap { overflow-x: auto; }
+
+table {
+    width: 100%;
+    min-width: 500px;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+th {
+    text-align: left;
+    color: #c6d9fa;
+    font-weight: 500;
+}
+
+th, td {
+    padding: 10px 6px;
+    border-bottom: 1px solid #bed6ff22;
+    vertical-align: middle;
+}
+
+td { white-space: pre-line; }
+
+.row-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.row-actions button {
+    padding: 6px 8px;
+    color: white;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #3769aa77;
+    font-size: 11px;
+}
+
+.row-actions .delete-btn { background: #a52d4c88; }
+
+.goals-list {
+    display: grid;
+    gap: 16px;
+}
+
+.goal-row {
+    display: grid;
+    grid-template-columns: 23px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 12px;
+}
+
+.check {
+    width: 20px;
+    height: 20px;
+    border: 1px solid #a6c4f0;
+    border-radius: 5px;
+    color: white;
+    background: #ffffff15;
+}
+
+.check.done {
+    background: #0bc99a;
+}
+
+.progress {
+    height: 7px;
+    background: #c4d9f92e;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.progress span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #2389ff, #42e0bd);
+    transition: width .6s;
+}
+
+.goal-percent {
+    display: block;
+    text-align: right;
+    color: var(--muted);
+    margin-top: 5px;
+}
+
+.item-list { display: grid; gap: 10px; }
+
+.list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #ffffff08;
+    animation: fadeUp .3s ease;
+}
+
+.list-item small {
+    display: block;
+    color: var(--muted);
+    margin-top: 5px;
+}
+
+.badge {
+    background: #ffa63835;
+    color: #ffd49a;
+    padding: 5px 9px;
+    border-radius: 12px;
+    font-size: 11px;
+}
+
+.activity {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 9px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #bed6ff22;
+    font-size: 12px;
+}
+
+.activity-icon {
+    width: 21px;
+    height: 21px;
+    border-radius: 6px;
+    background: #277ff6;
+    display: grid;
+    place-items: center;
+}
+
+.activity time {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.section-view { display: none; }
+
+.section-view.active {
+    display: block;
+    animation: fadeUp .4s ease;
+}
+
+.section-intro {
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.inline-form {
+    display: flex;
+    gap: 9px;
+    flex-wrap: wrap;
+    margin: 16px 0;
+}
+
+.inline-form input,
+.inline-form select {
+    flex: 1;
+    min-width: 130px;
+    padding: 11px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #10284d;
+    color: white;
+}
+
+.inline-form select option { color: black; }
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.setting-row p {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.notice {
+    display: none;
+    margin-bottom: 14px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #12dca555;
+    background: #12b48225;
+    color: #d7fff3;
+    font-size: 13px;
+}
+
+.notice.error {
+    background: #ff5f5f25;
+    border-color: #ff5f5f77;
+    color: #ffe0e0;
+}
+
+.floating-add {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 54px;
+    height: 54px;
+    border: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3289ff, #1760f4);
+    color: white;
+    font-size: 30px;
+    box-shadow: 0 8px 28px #1e63ff77;
+    z-index: 5;
+    animation: pulse 2.5s infinite;
+}
+
+.floating-add:hover { transform: scale(1.1) rotate(90deg); }
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    place-items: center;
+    padding: 18px;
+    background: #020816b8;
+    backdrop-filter: blur(8px);
+}
+
+.modal-backdrop.open {
+    display: grid;
+    animation: fadeIn .2s;
+}
+
+.modal {
+    width: min(560px, 100%);
+    padding: 22px;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: #0e2043;
+    box-shadow: 0 20px 70px #0008;
+    animation: popIn .25s;
+}
+
+.modal h3 { margin: 0; }
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 13px;
+}
+
+.field {
+    display: grid;
+    gap: 6px;
+    color: #c4d8f7;
+    font-size: 12px;
+}
+
+.field.full { grid-column: 1 / -1; }
+
+.field input {
+    width: 100%;
+    padding: 11px;
+    border: 1px solid #a4c3f359;
+    border-radius: 9px;
+    background: #ffffff12;
+    color: white;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    margin-top: 18px;
+}
+
+.empty {
+    padding: 15px 5px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes popIn {
+    from { opacity: 0; transform: scale(.96) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes float {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes pulse {
+    0%,100% { box-shadow: 0 8px 25px #1e63ff55; }
+    50% { box-shadow: 0 8px 32px #1e63ffbb; }
+}
+
+body.no-animations *,
+body.no-animations *::before,
+body.no-animations *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+@media (max-width: 1100px) {
+    .app { grid-template-columns: 215px minmax(0,1fr); }
+    .stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .main-grid,.bottom-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 680px) {
+    .app { display: block; }
+    .sidebar { position: relative; height: auto; padding: 15px; }
+    .brand { margin-bottom: 16px; }
+    .nav { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .nav-separator,.quote { display: none; }
+    main { padding: 0 12px 25px; }
+    .topbar { min-height: 62px; }
+    .welcome h2 { font-size: 25px; }
+    .stat { padding: 12px 8px; gap: 8px; }
+    .stat-icon { width: 34px; height: 34px; }
+    .stat strong { font-size: 22px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .field.full { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,*::before,*::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+<aside class="sidebar">
+    <div class="brand">
+        <div class="brand-icon">🎓</div>
+        <div>
+            <h1>Student Timetable</h1>
+            <p>&amp; Goals • Plan • Study • Achieve</p>
+        </div>
+    </div>
+
+    <nav class="nav">
+        <button class="active" data-section="dashboard">⌂ &nbsp; Dashboard</button>
+        <button data-section="timetable">▦ &nbsp; Timetable</button>
+        <button data-section="goals">◎ &nbsp; Goals</button>
+        <button data-section="courses">◧ &nbsp; Courses</button>
+        <button data-section="tasks">☑ &nbsp; Tasks</button>
+        <button id="navAdd">⊕ &nbsp; Add New</button>
+        <div class="nav-separator"></div>
+        <button data-section="settings">⚙ &nbsp; Settings</button>
+        <button id="logoutBtn">⇥ &nbsp; Logout</button>
+    </nav>
+
+    <div class="quote">
+        <h2>“</h2>
+        <p>Discipline today builds the freedom you want tomorrow.</p>
+        <small>— Your daily reminder</small>
+    </div>
+</aside>
+
+<main>
+    <header class="topbar">
+        <div class="date" id="todayDate"></div>
+        <div class="profile">
+            <div class="avatar">👤</div>
+            <span>Student Dashboard</span>
+        </div>
+    </header>
+
+    <section class="welcome">
+        <h2>Welcome, <em>Musonda!</em></h2>
+        <p>Your timetable, your goals, your future. Keep going!</p>
+    </section>
+
+    <div id="notice" class="notice" role="status"></div>
+
+    <section class="stats">
+        <article class="glass stat">
+            <div class="stat-icon blue">▦</div>
+            <div>
+                <div class="stat-label">Total Courses</div>
+                <strong id="courseCount">6</strong>
+                <small>This semester</small>
+            </div>
+        </article>
+
+        <article class="glass stat">
+            <div class="stat-icon green">✓</div>
+            <div>
+                <div class="stat-label">Completed Goals</div>
+                <strong id="completedGoals">2</strong>
+                <small>Keep it up!</small>
+            </div>
+        </article>
+
+        <article class="glass stat">
+            <div class="stat-icon orange">◷</div>
+            <div>
+                <div class="stat-label">Pending Tasks</div>
+                <strong id="pendingTasks">4</strong>
+                <small>To do</small>
+            </div>
+        </article>
+
+        <article class="glass stat">
+            <div class="stat-icon purple">◎</div>
+            <div>
+                <div class="stat-label">Overall Progress</div>
+                <strong id="overallProgress">33%</strong>
+                <small>Based on goals</small>
+            </div>
+        </article>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="section-view active">
+        <div class="main-grid">
+
+            <article class="glass panel">
+                <div class="panel-heading">
+                    <h3><span>▦</span> My Timetable</h3>
+                    <button class="small-btn" id="addRecordBtn">＋ Add session</button>
+                </div>
+
+                <div class="timetable-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Course / Goal</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Duration</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="timetableBody">
+                            <tr><td colspan="5">Loading timetable...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="glass panel">
+                <div class="panel-heading">
+                    <h3><span>◎</span> My Goals</h3>
+                    <button class="small-btn" id="manageGoalsBtn">Manage</button>
+                </div>
+                <div id="dashboardGoals" class="goals-list"></div>
+            </article>
+
+        </div>
+
+        <section class="bottom-grid">
+            <article class="glass panel">
+                <div class="panel-heading">
+                    <h3><span>☑</span> Upcoming Tasks</h3>
+                    <button class="small-btn" id="viewTasksBtn">View All →</button>
+                </div>
+                <div id="dashboardTasks" class="item-list"></div>
+            </article>
+
+            <article class="glass panel">
+                <div class="panel-heading">
+                    <h3><span>◷</span> Recent Activity</h3>
+                    <button class="small-btn" id="viewActivityBtn">View All →</button>
+                </div>
+                <div id="activityList"></div>
+            </article>
+        </section>
+    </section>
+
+    <!-- TIMETABLE PAGE -->
+    <section id="view-timetable" class="section-view">
+        <article class="glass panel">
+            <div class="panel-heading">
+                <h3>▦ Full Timetable</h3>
+                <button class="primary-btn" data-open-form>Add session</button>
+            </div>
+            <p class="section-intro">Add, view, edit and delete your study sessions.</p>
+
+            <div class="timetable-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th><th>Course</th><th>Goal</th>
+                            <th>Date</th><th>Time</th><th>Duration</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fullTimetableBody">
+                        <tr><td colspan="7">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <!-- GOALS PAGE -->
+    <section id="view-goals" class="section-view">
+        <article class="glass panel">
+            <div class="panel-heading"><h3>◎ Study Goals</h3></div>
+            <p class="section-intro">Add goals and track your progress.</p>
+
+            <form id="goalForm" class="inline-form">
+                <input id="goalInput" placeholder="Enter a study goal..." required>
+                <button class="primary-btn" type="submit">Add goal</button>
+            </form>
+
+            <div id="goalsPageList" class="item-list"></div>
+        </article>
+    </section>
+
+    <!-- COURSES PAGE -->
+    <section id="view-courses" class="section-view">
+        <article class="glass panel">
+            <div class="panel-heading"><h3>◧ My Courses</h3></div>
+            <p class="section-intro">Manage your semester course list.</p>
+
+            <form id="courseForm" class="inline-form">
+                <input id="courseCodeInput" placeholder="Course code" required>
+                <input id="courseNameInput" placeholder="Course name" required>
+                <button class="primary-btn" type="submit">Add course</button>
+            </form>
+
+            <div id="coursesList" class="item-list"></div>
+        </article>
+    </section>
+
+    <!-- TASKS PAGE -->
+    <section id="view-tasks" class="section-view">
+        <article class="glass panel">
+            <div class="panel-heading"><h3>☑ Study Tasks</h3></div>
+            <p class="section-intro">Add tasks, complete them, or remove them.</p>
+
+            <form id="taskForm" class="inline-form">
+                <input id="taskNameInput" placeholder="Task description" required>
+                <select id="taskCourseInput" required></select>
+                <input id="taskDueInput" type="date" required>
+                <button class="primary-btn" type="submit">Add task</button>
+            </form>
+
+            <div id="tasksPageList" class="item-list"></div>
+        </article>
+    </section>
+
+    <!-- SETTINGS PAGE -->
+    <section id="view-settings" class="section-view">
+        <article class="glass panel">
+            <div class="panel-heading"><h3>⚙ Settings</h3></div>
+
+            <div class="setting-row">
+                <div><strong>Animations</strong><p>Enable or disable dashboard animations.</p></div>
+                <button id="animationToggle" class="small-btn">Disable animations</button>
+            </div>
+
+            <div class="setting-row">
+                <div><strong>Refresh timetable</strong><p>Load the latest records from the API.</p></div>
+                <button id="refreshDataBtn" class="small-btn">Refresh</button>
+            </div>
+
+            <div class="setting-row">
+                <div><strong>Clear browser data</strong><p>Clear local goals, courses and tasks. API timetable records will remain.</p></div>
+                <button id="clearLocalBtn" class="danger-btn">Clear local data</button>
+            </div>
+        </article>
+    </section>
+
+    <!-- ACTIVITY PAGE -->
+    <section id="view-activity" class="section-view">
+        <article class="glass panel">
+            <div class="panel-heading"><h3>◷ Recent Activity</h3></div>
+            <div id="allActivityList"></div>
+        </article>
+    </section>
+
+</main>
+</div>
+
+<button class="floating-add" id="floatingAdd" title="Add study session">+</button>
+
+<!-- ADD / EDIT MODAL -->
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+        <div class="panel-heading">
+            <h3 id="modalTitle">Add study session</h3>
+            <button type="button" class="ghost-btn" id="closeModal">✕</button>
+        </div>
+
+        <form id="recordForm">
+            <input type="hidden" id="recordId">
+
+            <div class="form-grid">
+                <label class="field">Course code
+                    <input id="course_code" required placeholder="ICT251">
+                </label>
+
+                <label class="field">Course name
+                    <input id="course_name" required placeholder="Web Technologies I">
+                </label>
+
+                <label class="field full">Study goal
+                    <input id="study_goal" required placeholder="What do you want to achieve?">
+                </label>
+
+                <label class="field">Study date
+                    <input type="date" id="study_date" required>
+                </label>
+
+                <label class="field">Start time
+                    <input type="time" id="start_time" required>
+                </label>
+
+                <label class="field full">Duration in minutes
+                    <input type="number" id="duration_minutes" min="1" max="1440" value="60" required>
+                </label>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="ghost-btn" id="cancelModal">Cancel</button>
+                <button type="submit" class="primary-btn" id="saveRecordBtn">Save session</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
