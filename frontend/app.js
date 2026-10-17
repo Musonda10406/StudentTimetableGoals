@@ -1,41 +1,25 @@
+
 'use strict';
+
+/* =========================================================
+   STUDYFLOW — STUDENT TIMETABLE & GOALS
+   Backend: Node.js + Express + SQLite REST API
+   ========================================================= */
 
 const API_URL = 'https://musonda-study-plan.onrender.com/api/timetable';
 
-const $ = selector => document.querySelector(selector);
+const $ = (selector, parent = document) => parent.querySelector(selector);
+const $$ = (selector, parent = document) => [...parent.querySelectorAll(selector)];
 
 let records = [];
 let editingId = null;
 
-// Load saved browser data or use the default data.
-function loadLocal(key, fallback) {
-    try {
-        const saved = localStorage.getItem(key);
-        return saved ? JSON.parse(saved) : fallback;
-    } catch {
-        return fallback;
-    }
-}
-
-function saveLocal(key, data) {
-    localStorage.setItem(key, JSON.stringify(data));
-}
-
 let goals = loadLocal('studentGoals', [
-    { id: 1, title: 'Complete ICT221', progress: 100 },
-    { id: 2, title: 'Finish Java OOP exercises', progress: 100 },
-    { id: 3, title: 'Improve in Statistics', progress: 50 },
-    { id: 4, title: 'Build my final year project', progress: 0 },
-    { id: 5, title: 'Get A+ in all courses', progress: 0 }
-]);
-
-let courses = loadLocal('studentCourses', [
-    { code: 'ICT221', name: 'Computer Architecture' },
-    { code: 'ICT261', name: 'Introduction to OOP & Java' },
-    { code: 'ICT281', name: 'Statistics & Empirical Methods for Computing' },
-    { code: 'ICT241', name: 'Digital Design' },
-    { code: 'MSM111', name: 'Mathematical Methods I' },
-    { code: 'ICT251', name: 'Web Technologies I' }
+    { id: 1, title: 'Complete ICT221', course: 'ICT221', description: '', progress: 100 },
+    { id: 2, title: 'Finish Java OOP exercises', course: 'ICT261', description: '', progress: 100 },
+    { id: 3, title: 'Improve in Statistics', course: 'ICT281', description: '', progress: 50 },
+    { id: 4, title: 'Build my final year project', course: '', description: '', progress: 0 },
+    { id: 5, title: 'Get A+ in all courses', course: '', description: '', progress: 0 }
 ]);
 
 let tasks = loadLocal('studentTasks', [
@@ -47,114 +31,74 @@ let tasks = loadLocal('studentTasks', [
 
 let activity = loadLocal('studentActivity', []);
 
+/* -------------------- LOCAL STORAGE -------------------- */
 
-// Display messages on the dashboard.
-function showNotice(message, error = false) {
-    const notice = $('#notice');
-
-    notice.textContent = message;
-    notice.classList.toggle('error', error);
-    notice.style.display = 'block';
-
-    clearTimeout(showNotice.timer);
-
-    showNotice.timer = setTimeout(() => {
-        notice.style.display = 'none';
-    }, 4500);
+function loadLocal(key, fallback) {
+    try {
+        const saved = localStorage.getItem(key);
+        return saved === null ? fallback : JSON.parse(saved);
+    } catch (error) {
+        console.warn(`Could not load ${key}:`, error);
+        return fallback;
+    }
 }
 
-
-// Escape user-provided text before inserting it into HTML.
-function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, character => ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;'
-    })[character]);
+function saveLocal(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+        console.error(`Could not save ${key}:`, error);
+        showNotice('Could not save information in this browser.', true);
+    }
 }
 
+/* -------------------- GENERAL HELPERS -------------------- */
 
-// Record actions in the Recent Activity section.
-function addActivity(message) {
-    activity.unshift({
-        text: message,
-        time: new Date().toLocaleString()
-    });
-
-    activity = activity.slice(0, 30);
-
-    saveLocal('studentActivity', activity);
-    renderActivity();
+function firstElement(selectors) {
+    for (const selector of selectors) {
+        const element = $(selector);
+        if (element) return element;
+    }
+    return null;
 }
 
+function setText(selectors, value) {
+    const element = Array.isArray(selectors)
+        ? firstElement(selectors)
+        : $(selectors);
 
-// Update dashboard statistics.
-function updateStats() {
-    $('#courseCount').textContent = courses.length;
-
-    $('#completedGoals').textContent =
-        goals.filter(goal => goal.progress >= 100).length;
-
-    $('#pendingTasks').textContent =
-        tasks.filter(task => !task.done).length;
-
-    const progress = goals.length
-        ? Math.round(
-            goals.reduce((total, goal) => total + goal.progress, 0) /
-            goals.length
-        )
-        : 0;
-
-    $('#overallProgress').textContent = progress + '%';
+    if (element) element.textContent = String(value ?? '');
 }
 
+function todayString() {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
 
-// NAVIGATION
-function navigate(section) {
-    const allowedSections = [
-        'dashboard',
-        'timetable',
-        'goals',
-        'courses',
-        'tasks',
-        'settings',
-        'activity'
-    ];
-
-    if (!allowedSections.includes(section)) return;
-
-    document.querySelectorAll('.section-view').forEach(view => {
-        view.classList.toggle(
-            'active',
-            view.id === 'view-' + section
-        );
-    });
-
-    document.querySelectorAll('.nav [data-section]').forEach(button => {
-        button.classList.toggle(
-            'active',
-            button.dataset.section === section
-        );
-    });
-
-    if (section === 'timetable') renderFullTimetable();
-    if (section === 'goals') renderGoals();
-    if (section === 'courses') renderCourses();
-    if (section === 'tasks') renderTasks();
-    if (section === 'activity') renderActivity(true);
-
-    window.scrollTo({
-        top: 0,
-        behavior: document.body.classList.contains('no-animations')
-            ? 'auto'
-            : 'smooth'
-    });
+    return `${year}-${month}-${day}`;
 }
 
+function showNotice(message, isError = false) {
+    const notice = $('#globalNotice');
 
-// API REQUEST FUNCTION
+    if (notice) {
+        notice.textContent = message;
+        notice.classList.add('show');
+        notice.classList.toggle('error', isError);
+        notice.setAttribute('role', 'status');
+
+        clearTimeout(showNotice.timer);
+        showNotice.timer = setTimeout(() => {
+            notice.classList.remove('show');
+        }, 5000);
+    } else {
+        console[isError ? 'error' : 'log'](message);
+    }
+}
+
+/* -------------------- API -------------------- */
+
 async function requestApi(url, options = {}) {
     let response;
 
@@ -162,232 +106,221 @@ async function requestApi(url, options = {}) {
         response = await fetch(url, {
             ...options,
             headers: {
-                ...(options.body
-                    ? { 'Content-Type': 'application/json' }
-                    : {}),
+                ...(options.body ? { 'Content-Type': 'application/json' } : {}),
                 ...options.headers
             }
         });
-    } catch {
+    } catch (error) {
         throw new Error(
-            'Cannot connect to the API. Check that your backend is running.'
+            'Could not connect to the API. Check your internet connection and Render service.'
         );
     }
 
-    const text = await response.text();
-
+    const responseText = await response.text();
     let data = null;
 
-    if (text) {
+    if (responseText) {
         try {
-            data = JSON.parse(text);
+            data = JSON.parse(responseText);
         } catch {
-            throw new Error('The server returned an invalid response.');
+            throw new Error('The API returned invalid JSON.');
         }
     }
 
     if (!response.ok) {
-        throw new Error(data?.error || `Request failed: ${response.status}`);
+        throw new Error(
+            data?.error ||
+            data?.message ||
+            `API request failed with status ${response.status}.`
+        );
     }
 
     return data;
 }
 
+function extractRecords(response) {
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response?.data)) return response.data;
+    if (Array.isArray(response?.records)) return response.records;
+    if (Array.isArray(response?.timetable)) return response.timetable;
 
-// CREATE TABLE CELLS
-function createCell(value) {
-    const cell = document.createElement('td');
-    cell.textContent = value ?? '';
-    return cell;
+    throw new Error('The API response does not contain a timetable list.');
 }
 
+/* -------------------- ACTIVITY -------------------- */
 
-// CREATE EDIT AND DELETE BUTTONS
-function createActions(record) {
-    const cell = document.createElement('td');
-    const wrapper = document.createElement('div');
-
-    wrapper.className = 'row-actions';
-
-    const editButton = document.createElement('button');
-    editButton.type = 'button';
-    editButton.textContent = 'Edit';
-
-    editButton.addEventListener('click', () => {
-        openRecordModal(record);
+function addActivity(message) {
+    activity.unshift({
+        text: message,
+        time: new Date().toLocaleString()
     });
 
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.textContent = 'Delete';
-    deleteButton.className = 'delete-btn';
-
-    deleteButton.addEventListener('click', () => {
-        deleteRecord(record.id);
-    });
-
-    wrapper.append(editButton, deleteButton);
-    cell.append(wrapper);
-
-    return cell;
+    activity = activity.slice(0, 30);
+    saveLocal('studentActivity', activity);
+    renderActivity();
 }
 
+function renderActivity(showAll = false) {
+    const containers = [
+        $('#activityList'),
+        $('#dashboardActivity'),
+        $('#allActivityList'),
+        $('#activityPageList')
+    ].filter(Boolean);
 
-// DISPLAY RECORDS IN A TABLE
-function renderTable(tableBody, fullTable = false) {
-    if (!tableBody) return;
+    const uniqueContainers = [...new Set(containers)];
 
-    tableBody.replaceChildren();
+    uniqueContainers.forEach(container => {
+        container.replaceChildren();
 
-    if (records.length === 0) {
-        const row = document.createElement('tr');
-        const cell = createCell(
-            'No study sessions found. Click Add session to create one.'
-        );
+        const entries = activity.length
+            ? activity.slice(0, showAll ? 30 : 5)
+            : [{
+                text: 'Welcome to your study dashboard.',
+                time: new Date().toLocaleString()
+            }];
 
-        cell.colSpan = fullTable ? 7 : 5;
-        cell.className = 'empty';
+        entries.forEach(entry => {
+            const row = document.createElement('div');
+            row.className = 'activity list-item';
 
-        row.append(cell);
-        tableBody.append(row);
+            const message = document.createElement('span');
+            message.textContent = entry.text;
 
+            const time = document.createElement('small');
+            time.textContent = entry.time;
+
+            row.append(message, time);
+            container.append(row);
+        });
+    });
+}
+
+/* -------------------- DASHBOARD STATISTICS -------------------- */
+
+function updateStats() {
+    setText('#totalSessions', records.length);
+
+    const totalMinutes = records.reduce(
+        (sum, record) => sum + (Number(record.duration_minutes) || 0),
+        0
+    );
+
+    setText('#totalHours', (totalMinutes / 60).toFixed(1));
+
+    setText(
+        '#totalCourses',
+        new Set(records.map(record => record.course_code).filter(Boolean)).size
+    );
+
+    setText(
+        '#completedTasks',
+        tasks.filter(task => task.done).length
+    );
+
+    setText(
+        ['#completedGoals', '#goalsCompleted'],
+        goals.filter(goal => Number(goal.progress) >= 100).length
+    );
+
+    setText(
+        ['#pendingTasks', '#tasksPending'],
+        tasks.filter(task => !task.done).length
+    );
+
+    const progress = goals.length
+        ? Math.round(
+            goals.reduce(
+                (sum, goal) => sum + (Number(goal.progress) || 0),
+                0
+            ) / goals.length
+        )
+        : 0;
+
+    setText(['#overallProgress', '#studyProgress'], `${progress}%`);
+}
+
+/* -------------------- SESSION MODAL -------------------- */
+
+function getRecordForm() {
+    return $('#sessionForm');
+}
+
+function openRecordModal(record = null) {
+    const form = getRecordForm();
+    const modal = $('#sessionModal');
+
+    if (!form || !modal) {
+        showNotice('The session form or modal is missing from index.html.', true);
         return;
     }
 
-    records.forEach(record => {
-        const row = document.createElement('tr');
+    editingId = record ? record.id : null;
+    form.reset();
 
-        if (fullTable) {
-            row.append(
-                createCell(record.id),
-                createCell(record.course_code + ' — ' + record.course_name),
-                createCell(record.study_goal),
-                createCell(record.study_date),
-                createCell(record.start_time),
-                createCell(record.duration_minutes + ' minutes'),
-                createActions(record)
-            );
-        } else {
-            row.append(
-                createCell(
-                    record.course_code + ' — ' +
-                    record.course_name + '\n' +
-                    record.study_goal
-                ),
-                createCell(record.study_date),
-                createCell(record.start_time),
-                createCell(record.duration_minutes + ' min'),
-                createActions(record)
-            );
-        }
+    $('#sessionId').value = record?.id ?? '';
+    $('#courseCode').value = record?.course_code ?? '';
+    $('#courseName').value = record?.course_name ?? '';
+    $('#studyGoal').value = record?.study_goal ?? '';
+    $('#studyDate').value = record?.study_date ?? todayString();
+    $('#startTime').value = record?.start_time ?? '08:00';
+    $('#durationMinutes').value = record?.duration_minutes ?? 60;
 
-        tableBody.append(row);
-    });
+    setText('#modalTitle', record ? 'Edit study session' : 'Add study session');
+
+    const saveButton = $('#saveSessionButton');
+    if (saveButton) {
+        saveButton.textContent = record ? 'Save changes' : 'Save session';
+        saveButton.disabled = false;
+    }
+
+    const formNotice = $('#formNotice');
+    if (formNotice) {
+        formNotice.textContent = '';
+        formNotice.classList.remove('show', 'error');
+    }
+
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+
+    $('#courseCode')?.focus();
 }
 
+function closeRecordModal() {
+    const modal = $('#sessionModal');
 
-// READ: LOAD ALL RECORDS FROM THE BACKEND
-async function loadRecords() {
-    const tableBody = $('#timetableBody');
-    const fullBody = $('#fullTimetableBody');
+    if (modal) {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
 
-    try {
-        const data = await requestApi(API_URL);
+    getRecordForm()?.reset();
+    document.body.style.overflow = '';
+    editingId = null;
 
-        if (!Array.isArray(data)) {
-            throw new Error('The API did not return a list of records.');
-        }
-
-        records = data;
-
-        renderTable(tableBody);
-        renderTable(fullBody, true);
-
-        showNotice('Timetable loaded successfully.');
-
-    } catch (error) {
-        console.error(error);
-
-        [tableBody, fullBody].forEach(body => {
-            if (!body) return;
-
-            body.innerHTML = '';
-
-            const row = document.createElement('tr');
-            const cell = createCell(
-                'Unable to load records. Check that the backend is running.'
-            );
-
-            cell.colSpan = body.id === 'fullTimetableBody' ? 7 : 5;
-            cell.className = 'empty';
-
-            row.append(cell);
-            body.append(row);
-        });
-
-        showNotice(error.message, true);
+    const saveButton = $('#saveSessionButton');
+    if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Save session';
     }
 }
 
+/* Compatibility with the existing inline script in index.html */
+window.openSessionModal = () => openRecordModal();
 
-function renderFullTimetable() {
-    renderTable($('#fullTimetableBody'), true);
-}
+/* -------------------- CREATE / UPDATE SESSION -------------------- */
 
-
-// OPEN ADD/EDIT MODAL
-function openRecordModal(record = null) {
-    editingId = record ? record.id : null;
-
-    $('#recordForm').reset();
-
-    $('#recordId').value = record ? record.id : '';
-
-    $('#modalTitle').textContent = record
-        ? 'Edit study session'
-        : 'Add study session';
-
-    $('#saveRecordBtn').textContent = record
-        ? 'Save changes'
-        : 'Save session';
-
-    $('#course_code').value = record?.course_code || '';
-    $('#course_name').value = record?.course_name || '';
-    $('#study_goal').value = record?.study_goal || '';
-
-    $('#study_date').value = record?.study_date ||
-        new Date().toISOString().slice(0, 10);
-
-    $('#start_time').value = record?.start_time || '08:00';
-
-    $('#duration_minutes').value = record?.duration_minutes || 60;
-
-    $('#modalBackdrop').classList.add('open');
-
-    document.body.style.overflow = 'hidden';
-}
-
-
-function closeRecordModal() {
-    $('#modalBackdrop').classList.remove('open');
-
-    document.body.style.overflow = '';
-
-    editingId = null;
-}
-
-
-// CREATE OR UPDATE RECORD
-$('#recordForm').addEventListener('submit', async event => {
+async function saveRecord(event) {
     event.preventDefault();
 
     const record = {
-        course_code: $('#course_code').value.trim(),
-        course_name: $('#course_name').value.trim(),
-        study_goal: $('#study_goal').value.trim(),
-        study_date: $('#study_date').value,
-        start_time: $('#start_time').value,
-        duration_minutes: Number($('#duration_minutes').value)
+        course_code: $('#courseCode').value.trim(),
+        course_name: $('#courseName').value.trim(),
+        study_goal: $('#studyGoal').value.trim(),
+        study_date: $('#studyDate').value,
+        start_time: $('#startTime').value,
+        duration_minutes: Number($('#durationMinutes').value)
     };
 
     if (
@@ -400,32 +333,31 @@ $('#recordForm').addEventListener('submit', async event => {
         record.duration_minutes < 1 ||
         record.duration_minutes > 1440
     ) {
-        showNotice('Please complete every field correctly.', true);
+        showNotice('Complete all session fields correctly.', true);
         return;
     }
 
     const updating = editingId !== null;
+    const saveButton = $('#saveSessionButton');
+
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+    }
 
     try {
-        if (updating) {
-            await requestApi(API_URL + '/' + editingId, {
-                method: 'PUT',
-                body: JSON.stringify(record)
-            });
+        const url = updating ? `${API_URL}/${editingId}` : API_URL;
 
-            addActivity('Updated study session: ' + record.course_code);
+        await requestApi(url, {
+            method: updating ? 'PUT' : 'POST',
+            body: JSON.stringify(record)
+        });
 
-        } else {
-            await requestApi(API_URL, {
-                method: 'POST',
-                body: JSON.stringify(record)
-            });
-
-            addActivity('Added study session: ' + record.course_code);
-        }
+        addActivity(
+            `${updating ? 'Updated' : 'Added'} study session: ${record.course_code}`
+        );
 
         closeRecordModal();
-
         await loadRecords();
 
         showNotice(
@@ -433,560 +365,570 @@ $('#recordForm').addEventListener('submit', async event => {
                 ? 'Study session updated successfully.'
                 : 'Study session added successfully.'
         );
-
     } catch (error) {
+        console.error('Could not save session:', error);
         showNotice(error.message, true);
+    } finally {
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save session';
+        }
     }
-});
+}
 
+/* -------------------- DELETE SESSION -------------------- */
 
-// DELETE RECORD
 async function deleteRecord(id) {
-    const record = records.find(item => Number(item.id) === Number(id));
+    const record = records.find(item => String(item.id) === String(id));
 
     const confirmed = confirm(
-        'Delete this study session' +
-        (record ? ' for ' + record.course_code : '') +
-        '? This cannot be undone.'
+        `Delete study session${record ? ` for ${record.course_code}` : ''}? This cannot be undone.`
     );
 
     if (!confirmed) return;
 
     try {
-        await requestApi(API_URL + '/' + id, {
+        await requestApi(`${API_URL}/${encodeURIComponent(id)}`, {
             method: 'DELETE'
         });
 
-        addActivity('Deleted study session #' + id);
-
+        addActivity(`Deleted study session #${id}`);
         await loadRecords();
-
-        showNotice('Study session deleted.');
-
+        showNotice('Study session deleted successfully.');
     } catch (error) {
+        console.error('Could not delete session:', error);
         showNotice(error.message, true);
     }
 }
 
+/* -------------------- TIMETABLE DISPLAY -------------------- */
 
-// GOALS
-function renderGoals() {
-    const dashboard = $('#dashboardGoals');
-    const page = $('#goalsPageList');
+function createSessionCard(record) {
+    const card = document.createElement('article');
+    card.className = 'list-item session-card';
 
-    dashboard.replaceChildren();
-    page.replaceChildren();
+    const info = document.createElement('div');
 
-    goals.forEach(goal => {
-        const percentage = Math.max(
-            0,
-            Math.min(100, Number(goal.progress) || 0)
-        );
+    const heading = document.createElement('strong');
+    heading.textContent = `${record.course_code} — ${record.course_name}`;
 
-        // Dashboard goal
-        const row = document.createElement('div');
-        row.className = 'goal-row';
+    const goal = document.createElement('p');
+    goal.textContent = record.study_goal;
 
-        const check = document.createElement('button');
-        check.type = 'button';
-        check.className = 'check' +
-            (percentage >= 100 ? ' done' : '');
+    const details = document.createElement('small');
+    details.textContent =
+        `${record.study_date} · ${record.start_time} · ${record.duration_minutes} minutes`;
 
-        check.textContent = percentage >= 100 ? '✓' : '○';
+    info.append(heading, goal, details);
 
-        check.addEventListener('click', () => toggleGoal(goal.id));
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
 
-        const content = document.createElement('div');
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.textContent = 'Edit';
+    editButton.addEventListener('click', () => openRecordModal(record));
 
-        content.innerHTML = `
-            <div>${escapeHtml(goal.title)}</div>
-            <div class="progress">
-                <span style="width:${percentage}%"></span>
-            </div>
-            <small class="goal-percent">${percentage}%</small>
-        `;
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.textContent = 'Delete';
+    deleteButton.className = 'danger-btn';
+    deleteButton.addEventListener('click', () => deleteRecord(record.id));
 
-        row.append(check, content);
-        dashboard.append(row);
+    actions.append(editButton, deleteButton);
+    card.append(info, actions);
 
-        // Goals page
-        const item = document.createElement('div');
-        item.className = 'list-item';
+    return card;
+}
 
-        const info = document.createElement('div');
+function getFilteredRecords() {
+    const search = ($('#searchInput')?.value || '').trim().toLowerCase();
+    const course = $('#courseFilter')?.value || '';
+    const dateFilter = $('#dateFilter')?.value || '';
+    const today = todayString();
 
-        info.innerHTML = `
-            <strong>${escapeHtml(goal.title)}</strong>
-            <small>${percentage}% complete</small>
-            <div class="progress">
-                <span style="width:${percentage}%"></span>
-            </div>
-        `;
+    return records.filter(record => {
+        const searchable = [
+            record.course_code,
+            record.course_name,
+            record.study_goal
+        ].join(' ').toLowerCase();
 
-        const actions = document.createElement('div');
+        if (search && !searchable.includes(search)) return false;
+        if (course && record.course_code !== course) return false;
 
-        const toggle = document.createElement('button');
-        toggle.className = 'small-btn';
-        toggle.textContent = percentage >= 100 ? 'Reopen' : 'Complete';
+        if (dateFilter === 'today' && record.study_date !== today) return false;
+        if (dateFilter === 'upcoming' && record.study_date < today) return false;
+        if (dateFilter === 'past' && record.study_date >= today) return false;
 
-        toggle.addEventListener('click', () => toggleGoal(goal.id));
-
-        const remove = document.createElement('button');
-        remove.className = 'danger-btn';
-        remove.textContent = 'Delete';
-
-        remove.addEventListener('click', () => {
-            goals = goals.filter(g => g.id !== goal.id);
-
-            saveLocal('studentGoals', goals);
-
-            renderGoals();
-            updateStats();
-
-            addActivity('Removed a study goal');
-        });
-
-        actions.append(toggle, remove);
-        item.append(info, actions);
-
-        page.append(item);
+        return true;
     });
+}
 
-    if (goals.length === 0) {
-        dashboard.innerHTML =
-            '<p class="empty">No goals yet. Add one from the Goals page.</p>';
+function renderSessionsInto(container, list) {
+    if (!container) return;
 
-        page.innerHTML =
-            '<p class="empty">Add your first study goal above.</p>';
+    container.replaceChildren();
+
+    if (!list.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = records.length
+            ? 'No sessions match your filters.'
+            : 'No study sessions yet. Add your first session.';
+
+        container.append(empty);
+        return;
     }
 
+    list.forEach(record => container.append(createSessionCard(record)));
+}
+
+function updateCourseFilter() {
+    const select = $('#courseFilter');
+    if (!select) return;
+
+    const previous = select.value;
+    const codes = [
+        ...new Set(records.map(record => record.course_code).filter(Boolean))
+    ].sort();
+
+    select.replaceChildren();
+
+    const all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'All courses';
+    select.append(all);
+
+    codes.forEach(code => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = code;
+        select.append(option);
+    });
+
+    if (codes.includes(previous)) select.value = previous;
+}
+
+function renderTimetable() {
+    renderSessionsInto($('#timetableContainer'), getFilteredRecords());
+
+    const today = todayString();
+
+    const upcoming = [...records]
+        .filter(record => record.study_date >= today)
+        .sort((a, b) =>
+            `${a.study_date} ${a.start_time}`.localeCompare(
+                `${b.study_date} ${b.start_time}`
+            )
+        )
+        .slice(0, 4);
+
+    renderSessionsInto($('#dashboardSessions'), upcoming);
     updateStats();
 }
 
+async function loadRecords() {
+    const containers = [
+        $('#timetableContainer'),
+        $('#dashboardSessions')
+    ].filter(Boolean);
 
-function toggleGoal(id) {
-    const goal = goals.find(item => item.id === id);
+    containers.forEach(container => {
+        container.replaceChildren();
 
-    if (!goal) return;
+        const loading = document.createElement('p');
+        loading.className = 'loading';
+        loading.textContent = 'Loading timetable...';
+        container.append(loading);
+    });
 
-    goal.progress = goal.progress >= 100 ? 0 : 100;
+    try {
+        const response = await requestApi(API_URL);
+        records = extractRecords(response);
 
-    saveLocal('studentGoals', goals);
+        updateCourseFilter();
+        renderTimetable();
+    } catch (error) {
+        console.error('Timetable loading failed:', error);
 
-    renderGoals();
-    updateStats();
+        containers.forEach(container => {
+            container.replaceChildren();
 
-    addActivity(
-        (goal.progress >= 100 ? 'Completed goal: ' : 'Reopened goal: ') +
-        goal.title
-    );
+            const message = document.createElement('p');
+            message.className = 'empty';
+            message.textContent = 'Could not load timetable. ' + error.message;
+
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.textContent = 'Try again';
+            retry.addEventListener('click', loadRecords);
+
+            container.append(message, retry);
+        });
+
+        showNotice(error.message, true);
+    }
 }
 
+/* -------------------- GOALS -------------------- */
 
-$('#goalForm').addEventListener('submit', event => {
+function renderGoals() {
+    const containers = [
+        $('#dashboardGoals'),
+        $('#goalsContainer')
+    ].filter(Boolean);
+
+    containers.forEach(container => {
+        container.replaceChildren();
+
+        if (!goals.length) {
+            const empty = document.createElement('p');
+            empty.className = 'empty';
+            empty.textContent = 'No goals yet. Add a study goal below.';
+            container.append(empty);
+            return;
+        }
+
+        goals.forEach(goal => {
+            const percentage = Math.max(
+                0,
+                Math.min(100, Number(goal.progress) || 0)
+            );
+
+            const row = document.createElement('div');
+            row.className = 'goal-row list-item';
+
+            const info = document.createElement('div');
+
+            const title = document.createElement('strong');
+            title.textContent = goal.title;
+
+            const course = document.createElement('p');
+            course.textContent = goal.course ? `Course: ${goal.course}` : 'Personal goal';
+
+            const description = document.createElement('p');
+            description.textContent = goal.description || '';
+
+            const progress = document.createElement('progress');
+            progress.max = 100;
+            progress.value = percentage;
+
+            const percent = document.createElement('small');
+            percent.textContent = `${percentage}% complete`;
+
+            info.append(title, course, description, progress, percent);
+
+            const actions = document.createElement('div');
+            actions.className = 'row-actions';
+
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.textContent = percentage >= 100 ? 'Reopen' : 'Complete';
+
+            toggle.addEventListener('click', () => {
+                goal.progress = percentage >= 100 ? 0 : 100;
+
+                saveLocal('studentGoals', goals);
+                renderGoals();
+                updateStats();
+
+                addActivity(
+                    `${goal.progress >= 100 ? 'Completed' : 'Reopened'} goal: ${goal.title}`
+                );
+            });
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.textContent = 'Delete';
+            remove.className = 'danger-btn';
+
+            remove.addEventListener('click', () => {
+                if (!confirm(`Delete goal "${goal.title}"?`)) return;
+
+                goals = goals.filter(item => item.id !== goal.id);
+
+                saveLocal('studentGoals', goals);
+                renderGoals();
+                updateStats();
+
+                addActivity(`Deleted goal: ${goal.title}`);
+            });
+
+            actions.append(toggle, remove);
+            row.append(info, actions);
+            container.append(row);
+        });
+    });
+
+    updateStats();
+}
+
+function addGoal(event) {
     event.preventDefault();
 
-    const title = $('#goalInput').value.trim();
+    const title = $('#goalTitle')?.value.trim();
+    const course = $('#goalCourse')?.value.trim() || '';
+    const description = $('#goalDescription')?.value.trim() || '';
 
-    if (!title) return;
+    if (!title) {
+        showNotice('Enter a goal title.', true);
+        return;
+    }
 
     goals.push({
         id: Date.now(),
         title,
+        course,
+        description,
         progress: 0
     });
 
     saveLocal('studentGoals', goals);
-
-    $('#goalForm').reset();
+    $('#goalForm')?.reset();
 
     renderGoals();
-    updateStats();
-
-    addActivity('Added goal: ' + title);
-
+    addActivity(`Added goal: ${title}`);
     showNotice('Study goal added.');
-});
-
-
-// COURSES
-function renderCourses() {
-    const container = $('#coursesList');
-
-    container.replaceChildren();
-
-    courses.forEach(course => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-
-        const info = document.createElement('div');
-
-        info.innerHTML = `
-            <strong>${escapeHtml(course.code)} — ${escapeHtml(course.name)}</strong>
-            <small>Semester course</small>
-        `;
-
-        const remove = document.createElement('button');
-
-        remove.className = 'danger-btn';
-        remove.textContent = 'Remove';
-
-        remove.addEventListener('click', () => {
-            if (!confirm('Remove ' + course.code + ' from your course list?')) {
-                return;
-            }
-
-            courses = courses.filter(c => c.code !== course.code);
-
-            saveLocal('studentCourses', courses);
-
-            renderCourses();
-            updateCourseOptions();
-            updateStats();
-        });
-
-        item.append(info, remove);
-
-        container.append(item);
-    });
-
-    if (courses.length === 0) {
-        container.innerHTML = '<p class="empty">No courses added yet.</p>';
-    }
-
-    updateStats();
 }
 
+/* -------------------- TASKS -------------------- */
 
-$('#courseForm').addEventListener('submit', event => {
-    event.preventDefault();
+function renderTasks() {
+    const list = $('#taskList');
 
-    const code = $('#courseCodeInput').value.trim().toUpperCase();
-    const name = $('#courseNameInput').value.trim();
-
-    if (!code || !name) return;
-
-    if (courses.some(course => course.code.toUpperCase() === code)) {
-        showNotice('That course code already exists.', true);
+    if (!list) {
+        updateStats();
         return;
     }
 
-    courses.push({ code, name });
+    list.replaceChildren();
 
-    saveLocal('studentCourses', courses);
+    tasks.forEach(task => {
+        const item = document.createElement('li');
+        item.className = 'list-item task-item';
 
-    $('#courseForm').reset();
-
-    renderCourses();
-    updateCourseOptions();
-    updateStats();
-
-    addActivity('Added course: ' + code);
-
-    showNotice('Course added successfully.');
-});
-
-
-function updateCourseOptions() {
-    const select = $('#taskCourseInput');
-
-    select.replaceChildren();
-
-    courses.forEach(course => {
-        const option = document.createElement('option');
-
-        option.value = course.code;
-        option.textContent = course.code + ' — ' + course.name;
-
-        select.append(option);
-    });
-
-    if (courses.length === 0) {
-        const option = document.createElement('option');
-
-        option.value = '';
-        option.textContent = 'Add a course first';
-
-        select.append(option);
-    }
-}
-
-
-// TASKS
-function renderTasks() {
-    const page = $('#tasksPageList');
-    const dashboard = $('#dashboardTasks');
-
-    page.replaceChildren();
-    dashboard.replaceChildren();
-
-    const sortedTasks = [...tasks].sort((a, b) =>
-        a.due.localeCompare(b.due)
-    );
-
-    sortedTasks.forEach((task, index) => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = Boolean(task.done);
+        checkbox.setAttribute('aria-label', `Complete ${task.title}`);
 
         const info = document.createElement('div');
 
-        info.innerHTML = `
-            <strong>${escapeHtml(task.title)}</strong>
-            <small>${escapeHtml(task.course)} · Due ${escapeHtml(task.due)}</small>
-            <small>${task.done ? 'Completed' : 'Pending'}</small>
-        `;
+        const title = document.createElement('strong');
+        title.textContent = task.title;
 
-        const actions = document.createElement('div');
+        const details = document.createElement('small');
+        details.textContent = [
+            task.course || '',
+            task.due ? `Due ${task.due}` : ''
+        ].filter(Boolean).join(' · ');
 
-        const toggle = document.createElement('button');
-        toggle.className = 'small-btn';
-        toggle.textContent = task.done ? 'Reopen' : 'Complete';
+        const status = document.createElement('small');
+        status.textContent = task.done ? 'Completed' : 'Pending';
 
-        toggle.addEventListener('click', () => {
-            task.done = !task.done;
+        info.append(title, details, status);
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Delete';
+        remove.className = 'danger-btn';
+
+        checkbox.addEventListener('change', () => {
+            task.done = checkbox.checked;
 
             saveLocal('studentTasks', tasks);
-
             renderTasks();
             updateStats();
 
             addActivity(
-                (task.done ? 'Completed task: ' : 'Reopened task: ') +
-                task.title
+                `${task.done ? 'Completed' : 'Reopened'} task: ${task.title}`
             );
         });
 
-        const remove = document.createElement('button');
-        remove.className = 'danger-btn';
-        remove.textContent = 'Delete';
-
         remove.addEventListener('click', () => {
-            tasks = tasks.filter(t => t.id !== task.id);
+            if (!confirm(`Delete task "${task.title}"?`)) return;
+
+            tasks = tasks.filter(item => item.id !== task.id);
 
             saveLocal('studentTasks', tasks);
-
             renderTasks();
             updateStats();
 
-            addActivity('Deleted task: ' + task.title);
+            addActivity(`Deleted task: ${task.title}`);
         });
 
-        actions.append(toggle, remove);
-
-        item.append(info, actions);
-
-        page.append(item);
-
-        // Show the first four tasks on the dashboard.
-        if (index < 4) {
-            const card = document.createElement('div');
-            card.className = 'list-item';
-
-            const dashboardInfo = document.createElement('div');
-
-            dashboardInfo.innerHTML = `
-                <strong>${escapeHtml(task.title)}</strong>
-                <small>${escapeHtml(task.course)} · ${escapeHtml(task.due)}</small>
-            `;
-
-            const badge = document.createElement('span');
-            badge.className = 'badge';
-            badge.textContent = task.done ? 'Done' : 'Pending';
-
-            card.append(dashboardInfo, badge);
-
-            dashboard.append(card);
-        }
+        item.append(checkbox, info, remove);
+        list.append(item);
     });
 
-    if (tasks.length === 0) {
-        page.innerHTML = '<p class="empty">No tasks yet. Add one above.</p>';
-        dashboard.innerHTML = '<p class="empty">No upcoming tasks.</p>';
-    }
+    const empty = $('#emptyTasks');
+    if (empty) empty.style.display = tasks.length ? 'none' : 'block';
 
     updateStats();
 }
 
-
-$('#taskForm').addEventListener('submit', event => {
+function addTask(event) {
     event.preventDefault();
 
-    const title = $('#taskNameInput').value.trim();
-    const course = $('#taskCourseInput').value;
-    const due = $('#taskDueInput').value;
+    const title = $('#taskInput')?.value.trim();
 
-    if (!title || !course || !due) {
-        showNotice('Enter the task, course and due date.', true);
+    if (!title) {
+        showNotice('Enter a task first.', true);
         return;
     }
 
     tasks.push({
         id: Date.now(),
         title,
-        course,
-        due,
+        course: '',
+        due: '',
         done: false
     });
 
     saveLocal('studentTasks', tasks);
-
-    $('#taskForm').reset();
+    $('#taskForm')?.reset();
 
     renderTasks();
-    updateStats();
-
-    addActivity('Added task: ' + title);
-
+    addActivity(`Added task: ${title}`);
     showNotice('Task added successfully.');
-});
-
-
-// RECENT ACTIVITY
-function renderActivity(showAll = false) {
-    const containers = showAll
-        ? [$('#allActivityList')]
-        : [$('#activityList'), $('#allActivityList')];
-
-    containers.filter(Boolean).forEach(container => {
-        container.replaceChildren();
-
-        const entries = activity.length
-            ? activity
-            : [{
-                text: 'Dashboard initialized',
-                time: new Date().toLocaleString()
-            }];
-
-        entries.slice(0, showAll ? 30 : 5).forEach(entry => {
-            const row = document.createElement('div');
-            row.className = 'activity';
-
-            const icon = document.createElement('span');
-            icon.className = 'activity-icon';
-            icon.textContent = '✓';
-
-            const text = document.createElement('span');
-            text.textContent = entry.text;
-
-            const time = document.createElement('time');
-            time.textContent = entry.time;
-
-            row.append(icon, text, time);
-
-            container.append(row);
-        });
-    });
 }
 
+/* -------------------- NAVIGATION -------------------- */
 
-// BUTTONS AND NAVIGATION
+function navigate(section) {
+    const name = String(section || '').replace(/^view-/, '');
+
+    $$('.section-view').forEach(view => {
+        view.classList.toggle('active', view.id === `view-${name}`);
+    });
+
+    $$('.nav-button[data-section], .nav [data-section], [data-section].nav-link')
+        .forEach(button => {
+            button.classList.toggle('active', button.dataset.section === name);
+        });
+
+    const titles = {
+        dashboard: ['Dashboard', 'Your study overview'],
+        timetable: ['Timetable', 'Manage your study sessions'],
+        goals: ['Study Goals', 'Track your academic progress'],
+        tasks: ['Tasks', 'Manage your study tasks']
+    };
+
+    if (titles[name]) {
+        setText('#pageTitle', titles[name][0]);
+        setText('#pageSubtitle', titles[name][1]);
+    }
+
+    if (name === 'dashboard') {
+        renderTimetable();
+        renderGoals();
+        renderTasks();
+        renderActivity();
+    } else if (name === 'timetable') {
+        renderTimetable();
+    } else if (name === 'goals') {
+        renderGoals();
+    } else if (name === 'tasks') {
+        renderTasks();
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* -------------------- EVENT BINDING -------------------- */
+
 function bindEvents() {
-    document.querySelectorAll('.nav [data-section]').forEach(button => {
+    // Navigation buttons
+    $$('.nav-button[data-section], .nav [data-section], [data-section].nav-link')
+        .forEach(button => {
+            button.addEventListener('click', () => {
+                navigate(button.dataset.section);
+            });
+        });
+
+    // Navigation links elsewhere on the page
+    $$('[data-go-section]').forEach(button => {
         button.addEventListener('click', () => {
-            navigate(button.dataset.section);
+            navigate(button.dataset.goSection);
         });
     });
 
-    // All Add Session buttons open the same form.
-    ['navAdd', 'addRecordBtn', 'floatingAdd'].forEach(id => {
-        $('#' + id).addEventListener('click', () => openRecordModal());
+    // Add session buttons
+    [
+        '#topAddButton',
+        '#welcomeAddButton',
+        '#addSessionButton'
+    ].forEach(selector => {
+        $(selector)?.addEventListener('click', event => {
+            event.preventDefault();
+            openRecordModal();
+        });
     });
 
-    document.querySelectorAll('[data-open-form]').forEach(button => {
-        button.addEventListener('click', () => openRecordModal());
-    });
+    // Session form
+    getRecordForm()?.addEventListener('submit', saveRecord);
 
-    $('#manageGoalsBtn').addEventListener('click', () => navigate('goals'));
-    $('#viewTasksBtn').addEventListener('click', () => navigate('tasks'));
-    $('#viewActivityBtn').addEventListener('click', () => navigate('activity'));
+    // Modal controls
+    $('#closeModalButton')?.addEventListener('click', closeRecordModal);
+    $('#cancelModalButton')?.addEventListener('click', closeRecordModal);
 
-    $('#cancelModal').addEventListener('click', closeRecordModal);
-    $('#closeModal').addEventListener('click', closeRecordModal);
-
-    $('#modalBackdrop').addEventListener('click', event => {
-        if (event.target === $('#modalBackdrop')) {
+    $('#sessionModal')?.addEventListener('click', event => {
+        if (event.target === $('#sessionModal')) {
             closeRecordModal();
         }
     });
 
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {
-            closeRecordModal();
-        }
+        if (event.key === 'Escape') closeRecordModal();
     });
 
-    $('#logoutBtn').addEventListener('click', () => {
-        alert(
-            'This project does not have a login system yet. ' +
-            'Your dashboard is still open.'
-        );
+    // Goals and tasks
+    $('#goalForm')?.addEventListener('submit', addGoal);
+    $('#taskForm')?.addEventListener('submit', addTask);
+
+    // Refresh timetable
+    $('#refreshButton')?.addEventListener('click', loadRecords);
+
+    // Search and filters
+    ['#searchInput', '#courseFilter', '#dateFilter'].forEach(selector => {
+        $(selector)?.addEventListener('input', renderTimetable);
+        $(selector)?.addEventListener('change', renderTimetable);
     });
 
-    $('#animationToggle').addEventListener('click', () => {
-        const disabled = document.body.classList.toggle('no-animations');
-
-        $('#animationToggle').textContent = disabled
-            ? 'Enable animations'
-            : 'Disable animations';
-
-        showNotice(disabled
-            ? 'Animations disabled.'
-            : 'Animations enabled.');
-    });
-
-    $('#refreshDataBtn').addEventListener('click', loadRecords);
-
-    $('#clearLocalBtn').addEventListener('click', () => {
-        const confirmed = confirm(
-            'Clear saved goals, courses, tasks and activity? ' +
-            'This will NOT delete timetable records from the API.'
-        );
-
-        if (!confirmed) return;
-
-        ['studentGoals', 'studentCourses', 'studentTasks', 'studentActivity']
-            .forEach(key => localStorage.removeItem(key));
-
-        goals = [];
-        courses = [];
-        tasks = [];
-        activity = [];
-
-        renderGoals();
-        renderCourses();
-        renderTasks();
-        renderActivity();
-        updateCourseOptions();
-        updateStats();
-
-        showNotice('Browser data cleared. Timetable records remain safe.');
+    // Sidebar toggle
+    $('#menuToggle')?.addEventListener('click', () => {
+        $('#sidebar')?.classList.toggle('open');
     });
 }
 
+/* -------------------- START APPLICATION -------------------- */
 
-// START THE APPLICATION
 function init() {
-    $('#todayDate').textContent = new Date().toLocaleDateString(
-        undefined,
-        {
+    setText(
+        '#todayLabel',
+        new Date().toLocaleDateString(undefined, {
             weekday: 'short',
             day: 'numeric',
             month: 'short',
             year: 'numeric'
-        }
+        })
     );
 
     bindEvents();
 
-    updateCourseOptions();
     renderGoals();
-    renderCourses();
     renderTasks();
     renderActivity();
+    renderTimetable();
 
     loadRecords();
 
-    console.log('Student Timetable & Goals dashboard started.');
+    console.log('StudyFlow application started.');
 }
 
-init();
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
