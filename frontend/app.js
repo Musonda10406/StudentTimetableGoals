@@ -1,6 +1,6 @@
 'use strict';
 
-const API_URL = 'http://localhost:3000/api/timetable';
+cconst API_URL = 'https://musonda-study-plan.onrender.com/api/timetable';
 
 const $ = selector => document.querySelector(selector);
 
